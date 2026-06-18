@@ -21,8 +21,13 @@
         .slot.disponivel { background-color: var(--disponivel); }
         .slot.ocupado { background-color: var(--ocupado); cursor: not-allowed; }
         .slot.selecionado { outline: 3px solid #000; }
-        button.submit-btn { background: var(--cor-principal); color: white; border: none; padding: 16px; width: 100%; border-radius: 6px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 25px; box-sizing: border-box; }
+        button.submit-btn { background: var(--cor-principal); color: white; border: none; padding: 16px; width: 100%; border-radius: 6px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 20px; box-sizing: border-box; }
         .legenda { text-align: center; font-size: 13px; margin-bottom: 15px; }
+        
+        /* Estilo Corrigido da Caixinha RGPD */
+        .rgpd-container { display: flex; align-items: center; gap: 10px; margin-top: 20px; background: #f9f9f9; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0; }
+        .rgpd-container input[type="checkbox"] { width: 20px; height: 20px; min-width: 20px; cursor: pointer; margin: 0; -webkit-appearance: checkbox; }
+        .rgpd-text { font-size: 12.5px; color: #555; line-height: 1.4; margin: 0; }
     </style>
 </head>
 <body>
@@ -51,6 +56,12 @@
     <h3>Horários Disponíveis</h3>
     <p class="legenda"><span style="color: var(--disponivel)">■ Verde = Livre</span> | <span style="color: var(--ocupado)">■ Azul = Ocupado</span></p>
     <div class="slots-grid" id="slots-container"></div>
+    
+    <div class="rgpd-container">
+        <input type="checkbox" id="check-rgpd">
+        <p class="rgpd-text">Aceito que os meus dados pessoais (nome, telemóvel e e-mail) sejam processados e guardados de forma segura e exclusiva para efeitos de agendamento.</p>
+    </div>
+
     <button class="submit-btn" onclick="confirmBooking()">Confirmar Marcação</button>
 </div>
 <script>
@@ -74,42 +85,75 @@
         "Pestanas: Lifting c/ coloração (25€)", "Pestanas: Lifting (20€)", "Pestanas: Coloração (10€)"
     ];
     const horariosPadrao = ["09:00 - 10:30", "10:30 - 12:00", "12:00 - 13:30", "14:30 - 16:00", "16:00 - 17:30", "17:30 - 19:00", "19:00 - 20:30"];
-    let marcacoes = [];
+    
+    let slotsOcupadosDoDia = {};
     let horarioSelecionado = null;
 
     window.onload = function() {
         const selectServico = document.getElementById('service');
-        servicos.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerHTML = s; selectServico.appendChild(opt); });
+        selectServico.innerHTML = '';
+        servicos.forEach(s => { 
+            let opt = document.createElement('option'); 
+            opt.value = s; 
+            opt.innerHTML = s; 
+            selectServico.appendChild(opt); 
+        });
+        
         let hoje = new Date().toISOString().split('T')[0];
         document.getElementById('date').min = hoje; 
-        database.ref('marcacoes_salao').on('value', (snapshot) => {
-            marcacoes = [];
-            const data = snapshot.val();
-            if (data) { Object.keys(data).forEach(key => { marcacoes.push(data[key]); }); }
-            loadSlots();
+        
+        database.ref('slots_ocupados').on('value', () => {
+            if (document.getElementById('date').value) {
+                loadSlots();
+            }
         });
     };
 
     function loadSlots() {
         const slotsContainer = document.getElementById('slots-container');
-        slotsContainer.innerHTML = ''; horarioSelecionado = null;
+        slotsContainer.innerHTML = ''; 
+        horarioSelecionado = null;
         const dataSelecionada = document.getElementById('date').value;
-        if (dataSelecionada && new Date(dataSelecionada).getDay() === 0) {
+        
+        if (!dataSelecionada) return;
+
+        if (new Date(dataSelecionada).getDay() === 0) {
             slotsContainer.innerHTML = "<p style='grid-column: 1/-1; text-align:center; font-weight:bold; color:red;'>Estamos encerrados ao Domingo.</p>";
             return;
         }
+
+        let dataChave = dataSelecionada.replace(/\//g, '-');
+
+        database.ref('slots_ocupados').child(dataChave).once('value').then((snapshot) => {
+            slotsOcupadosDoDia = snapshot.val() || {};
+            desenharQuadrados();
+        }).catch(() => {
+            // Se der erro por a pasta não existir ainda, assume tudo livre
+            slotsOcupadosDoDia = {};
+            desenharQuadrados();
+        });
+    }
+
+    function desenharQuadrados() {
+        const slotsContainer = document.getElementById('slots-container');
+        slotsContainer.innerHTML = '';
+        
         horariosPadrao.forEach(horario => {
             let div = document.createElement('div');
             div.className = 'slot';
             div.innerText = horario.split(" - ")[0];
-            let jaOcupado = marcacoes.some(m => m.data === dataSelecionada && m.horario === horario);
-            if (jaOcupado) { div.classList.add('ocupado'); } 
-            else {
+            
+            let horaChave = horario.split(' ')[0].replace(':', 'h'); 
+            let jaOcupado = slotsOcupadosDoDia[horaChave] === true;
+
+            if (jaOcupado) { 
+                div.classList.add('ocupado'); 
+            } else {
                 div.classList.add('disponivel');
                 div.onclick = function() {
-                    if (!document.getElementById('date').value) { alert("Por favor, escolha primeiro o dia!"); return; }
                     document.querySelectorAll('.slot').forEach(s => s.classList.remove('selecionado'));
-                    div.classList.add('selecionado'); horarioSelecionado = horario;
+                    div.classList.add('selecionado'); 
+                    horarioSelecionado = horario;
                 };
             }
             slotsContainer.appendChild(div);
@@ -122,16 +166,60 @@
         const telemovel = document.getElementById('client-phone').value.trim();
         const servico = document.getElementById('service').value;
         const data = document.getElementById('date').value;
-        if (!nome || !email || !telemovel || !data || !horarioSelecionado) { alert("Preencha todos os campos e selecione um horário livre!"); return; }
-        database.ref('marcacoes_salao').push({ id: Date.now(), nome: nome, email: email, telemovel: telemovel, servico: servico, data: data, horario: horarioSelecionado })
-        .then(() => {
-            alert("Marcação efetuada com sucesso!");
-            document.getElementById('client-name').value = '';
-            document.getElementById('client-email').value = '';
-            document.getElementById('client-phone').value = '';
-            document.getElementById('date').value = ''; 
-            loadSlots();
-        }).catch((error) => { alert("Erro ao enviar marcação."); console.error(error); });
+        
+        const checkRGPD = document.getElementById('check-rgpd');
+        const aceitouRGPD = checkRGPD ? checkRGPD.checked : false;
+
+        if (!nome || !email || !telemovel || !data || !horarioSelecionado) { 
+            alert("Por favor, preencha todos os campos e escolha um horário livre!"); 
+            return; 
+        }
+        
+        if (!aceitouRGPD) {
+            alert("Para efetuar a marcação, precisa de aceitar a caixa de consentimento dos dados (RGPD).");
+            return;
+        }
+
+        let dataChave = data.replace(/\//g, '-');
+        let horaChave = horarioSelecionado.split(' ')[0].replace(':', 'h');
+        
+        let slotRef = database.ref('slots_ocupados').child(dataChave).child(horaChave);
+
+        slotRef.transaction((currentValue) => {
+            if (currentValue === true) {
+                return; 
+            }
+            return true; 
+        }, (error, committed, snapshot) => {
+            if (error) {
+                alert("Ocorreu um erro ao processar o seu agendamento. Tente novamente.");
+            } else if (!committed) {
+                alert("Lamento, mas este horário acabou de ser reservado por outra pessoa! Escolha outro horário disponível.");
+                loadSlots();
+            } else {
+                database.ref('marcacoes_salao').push({ 
+                    id: Date.now(), 
+                    nome: nome, 
+                    email: email, 
+                    telemovel: telemovel, 
+                    servico: servico, 
+                    data: data, 
+                    horario: horarioSelecionado 
+                })
+                .then(() => {
+                    alert("Marcação efetuada com sucesso!");
+                    document.getElementById('client-name').value = '';
+                    document.getElementById('client-email').value = '';
+                    document.getElementById('client-phone').value = '';
+                    document.getElementById('date').value = ''; 
+                    document.getElementById('check-rgpd').checked = false;
+                    loadSlots();
+                }).catch((error) => { 
+                    alert("Erro ao gravar os dados da marcação."); 
+                    console.error(error); 
+                });
+            }
+        });
     }
 </script>
 </body>
