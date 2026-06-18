@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marcações - Salão de Estética</title>
+    <style>
+        :root { --disponivel: #2ecc71; --ocupado: #1a365d; --cor-principal: #d4a373; --cor-fundo: #fefae0; }
+        
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--cor-fundo); margin: 0; padding: 15px; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); box-sizing: border-box; }
+        h1 { text-align: center; color: #4a3728; font-size: 24px; margin-top: 10px; }
+        h3 { text-align: center; color: #4a3728; font-size: 18px; }
+        
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
+        
+        input, select { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; -webkit-appearance: none; }
+        input[type="date"] { cursor: pointer; } 
+        
+        .slots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin-top: 20px; }
+        .slot { padding: 12px 5px; text-align: center; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 15px; }
+        .slot.disponivel { background-color: var(--disponivel); }
+        .slot.ocupado { background-color: var(--ocupado); cursor: not-allowed; }
+        .slot.selecionado { outline: 3px solid #000; }
+        
+        button.submit-btn { background: var(--cor-principal); color: white; border: none; padding: 16px; width: 100%; border-radius: 6px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 25px; box-sizing: border-box; }
+        
+        .legenda { text-align: center; font-size: 13px; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Faça a sua Marcação</h1>
+    
+    <div class="form-group">
+        <label for="client-name">Seu Nome:</label>
+        <input type="text" id="client-name" placeholder="Ex: Maria Silva" required>
+    </div>
+
+    <div class="form-group">
+        <label for="client-email">Seu E-mail:</label>
+        <input type="email" id="client-email" placeholder="Ex: maria.silva@email.com" required>
+    </div>
+
+    <div class="form-group">
+        <label for="client-phone">Número de Telemóvel:</label>
+        <input type="tel" id="client-phone" placeholder="Ex: 912345678" required>
+    </div>
+
+    <div class="form-group">
+        <label for="service">Selecione o Serviço:</label>
+        <select id="service"></select>
+    </div>
+
+    <div class="form-group">
+        <label for="date">Escolha o Dia:</label>
+        <input type="date" id="date" onchange="loadSlots()" onclick="this.showPicker()">
+    </div>
+
+    <h3>Horários Disponíveis</h3>
+    <p class="legenda"><span style="color: var(--disponivel)">■ Verde = Livre</span> | <span style="color: var(--ocupado)">■ Azul = Ocupado</span></p>
+    <div class="slots-grid" id="slots-container"></div>
+
+    <button class="submit-btn" onclick="confirmBooking()">Confirmar Marcação</button>
+</div>
+
+<script>
+    const servicos = [
+        "Depilação Fem: Buço (3€)", "Depilação Fem: Sobrancelhas (4€)", "Depilação Fem: Buço + Sobrancelhas (6€)", "Depilação Fem: Meia perna (8€)", "Depilação Fem: Perna inteira (12€)", "Depilação Fem: Virilha normal (6€)", "Depilação Fem: Virilha total (10€)", "Depilação Fem: Axilas (5€)", "Depilação Fem: Braço ou Glúteo (5€)", "Depilação Fem: DEPILAÇÃO COMPLETA (25€)",
+        "Depilação Masc: Orelha (3€)", "Depilação Masc: Sobrancelhas (3€)", "Depilação Masc: Nariz (3€)", "Depilação Masc: Meia perna (8€)", "Depilação Masc: Perna inteira (12€)", "Depilação Masc: Abdómen (6€)", "Depilação Masc: Tórax (6€)", "Depilação Masc: Costas (10€)", "Depilação Masc: Braço (5€)",
+        "Manicure: Normal (6€)", "Manicure: Gel c/ extensões (25€)", "Manicure: Manutenção de gel (17€)", "Manicure: Verniz gel (12€)", "Manicure: Cada extensão extra (1€)", "Manicure: Cada unha extra (1.5€)",
+        "Pedicure: Corte de unhas simples (6€)", "Pedicure: Corte de unhas difíceis (8€)", "Pedicure: Verniz gel (10€)", "Pedicure: Pedicure normal (15€)", "Pedicure: Pedicure c/ unhas difíceis (18€)", "Pedicure: Pedicure normal c/ verniz gel (23€)",
+        "Pestanas: Lifting c/ coloração (25€)", "Pestanas: Lifting (20€)", "Pestanas: Coloração (10€)"
+    ];
+
+    const horariosPadrao = ["09:00 - 10:30", "10:30 - 12:00", "12:00 - 13:30", "14:30 - 16:00", "16:00 - 17:30", "17:30 - 19:00", "19:00 - 20:30"];
+    let marcacoes = JSON.parse(localStorage.getItem('marcacoes_salao')) || [];
+    let horarioSelecionado = null;
+
+    window.onload = function() {
+        const selectServico = document.getElementById('service');
+        servicos.forEach(s => { let opt = document.createElement('option'); opt.value = s; opt.innerHTML = s; selectServico.appendChild(opt); });
+        
+        let hoje = new Date().toISOString().split('T')[0];
+        document.getElementById('date').min = hoje; 
+        
+        loadSlots();
+    };
+
+    function loadSlots() {
+        const slotsContainer = document.getElementById('slots-container');
+        slotsContainer.innerHTML = ''; horarioSelecionado = null;
+        const dataSelecionada = document.getElementById('date').value;
+
+        // Se for Domingo, avisa que está fechado
+        if (dataSelecionada && new Date(dataSelecionada).getDay() === 0) {
+            slotsContainer.innerHTML = "<p style='grid-column: 1/-1; text-align:center; font-weight:bold; color:red;'>Estamos encerrados ao Domingo.</p>";
+            return;
+        }
+
+        marcacoes = JSON.parse(localStorage.getItem('marcacoes_salao')) || [];
+
+        horariosPadrao.forEach(horario => {
+            let div = document.createElement('div');
+            div.className = 'slot';
+            div.innerText = horario.split(" - ")[0];
+            
+            // Se houver uma data selecionada, verifica se o horário está ocupado
+            let jaOcupado = false;
+            if (dataSelecionada) {
+                jaOcupado = marcacoes.some(m => m.data === dataSelecionada && m.horario === horario);
+            }
+
+            if (jaOcupado) { 
+                div.classList.add('ocupado'); 
+            } else {
+                div.classList.add('disponivel');
+                div.onclick = function() {
+                    if (!document.getElementById('date').value) {
+                        alert("Por favor, escolha primeiro o dia no calendário acima!");
+                        return;
+                    }
+                    document.querySelectorAll('.slot').forEach(s => s.classList.remove('selecionative'));
+                    document.querySelectorAll('.slot').forEach(s => s.classList.remove('selecionado'));
+                    div.classList.add('selecionado'); horarioSelecionado = horario;
+                };
+            }
+            slotsContainer.appendChild(div);
+        });
+    }
+
+    function confirmBooking() {
+        const nome = document.getElementById('client-name').value.trim();
+        const email = document.getElementById('client-email').value.trim();
+        const telemovel = document.getElementById('client-phone').value.trim();
+        const servico = document.getElementById('service').value;
+        const data = document.getElementById('date').value;
+
+        if (!nome || !email || !telemovel || !data || !horarioSelecionado) { 
+            alert("Preencha todos os campos (Nome, E-mail, Telemóvel), escolha o dia e selecione um horário livre!"); 
+            return; 
+        }
+
+        marcacoes = JSON.parse(localStorage.getItem('marcacoes_salao')) || [];
+        
+        marcacoes.push({ 
+            id: Date.now(), 
+            nome: nome, 
+            email: email, 
+            telemovel: telemovel, 
+            servico: servico, 
+            data: data, 
+            horario: horarioSelecionado 
+        });
+        
+        localStorage.setItem('marcacoes_salao', JSON.stringify(marcacoes));
+        
+        alert("Marcação efetuada com sucesso!");
+        
+        document.getElementById('client-name').value = '';
+        document.getElementById('client-email').value = '';
+        document.getElementById('client-phone').value = '';
+        document.getElementById('date').value = ''; 
+        
+        loadSlots();
+    }
+</script>
+</body>
+</html>
