@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Gestão Oculto</title>
+    <title>Painel de Gestão Seguro - Caramelo Nails</title>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -18,8 +18,6 @@
         .admin-table th { background-color: #1a365d; color: white; }
         .delete-btn { background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
         .refresh-btn { background: #2ecc71; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 15px; width: 100%; box-sizing: border-box; } 
-        
-        /* Estilos do novo formulário de Login */
         .login-box { max-width: 400px; margin: 80px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center; }
         .login-box input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
         .login-btn { background: #1a365d; color: white; border: none; padding: 12px; width: 100%; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 10px; }
@@ -29,8 +27,8 @@
 <body>
 
 <div id="zona-login" class="login-box">
-    <h2>Acesso ao Painel</h2>
-    <input type="email" id="login-email" placeholder="E-mail do Administrador">
+    <h2>Acesso Administrativo</h2>
+    <input type="email" id="login-email" placeholder="E-mail da tua Mãe">
     <input type="password" id="login-password" placeholder="Palavra-passe">
     <button class="login-btn" onclick="fazerLogin()">Entrar</button>
 </div>
@@ -71,15 +69,12 @@
     const database = firebase.database();
     const auth = firebase.auth();
 
-    // Sistema inteligente: A Google verifica sozinha se o utilizador tem permissao
     auth.onAuthStateChanged((user) => {
         if (user) {
-            // Se o utilizador fez login com sucesso
             document.getElementById("zona-login").style.display = "none";
             document.getElementById("painel-conteudo").style.display = "block";
             ligarFirebase();
         } else {
-            // Se nao está logado, mostra o formulario de login
             document.getElementById("painel-conteudo").style.display = "none";
             document.getElementById("zona-login").style.display = "block";
         }
@@ -88,16 +83,12 @@
     function fazerLogin() {
         const email = document.getElementById("login-email").value;
         const pass = document.getElementById("login-password").value;
-
         auth.signInWithEmailAndPassword(email, pass).catch((error) => {
-            alert("Erro no acesso: E-mail ou palavra-passe incorretos!");
-            console.error(error);
+            alert("Acesso negado: Dados incorretos!");
         });
     }
 
-    function fazerLogout() {
-        auth.signOut();
-    }
+    function fazerLogout() { auth.signOut(); }
 
     let marcacoesBrutas = {};
     function ligarFirebase() {
@@ -115,6 +106,12 @@
         });
     }
 
+    // Escapar dados vindos da internet para evitar ataques XSS
+    function escaparHTML(str) {
+        if (!str) return '';
+        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
     function processarERenderizarTabela() {
         const tbody = document.getElementById('admin-table-body');
         if (!tbody) return;
@@ -122,6 +119,7 @@
         let listaMarcacoes = [];
         const hoje = new Date();
         hoje.setHours(0, 0, 0, 0);
+
         Object.keys(marcacoesBrutas).forEach(idFirebase => {
             let m = marcacoesBrutas[idFirebase];
             m.idFirebase = idFirebase;
@@ -138,33 +136,41 @@
                 }
             }
         });
+
         listaMarcacoes.sort((a, b) => {
             let dataA = a.data.includes('/') ? a.data.split('/').reverse().join('-') : a.data;
             let dataB = b.data.includes('/') ? b.data.split('/').reverse().join('-') : b.data;
             return new Date(dataA + ' ' + (a.horario ? a.horario.split(' ')[0] : '00:00')) - new Date(dataB + ' ' + (b.horario ? b.horario.split(' ')[0] : '00:00'));
         });
+
         if (listaMarcacoes.length === 0) {
             tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Nenhuma marcação registada.</td></tr>";
             return;
         }
+
         listaMarcacoes.forEach(m => {
             let tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><b>${m.data || ''}</b></td>
-                <td><span style="color:#1a365d; font-weight:bold;">${m.horario || ''}</span></td>
-                <td>${m.nome || ''}</td>
-                <td><a href="tel:${m.telemovel || ''}">${m.telemovel || 'N/A'}</a></td>
-                <td><a href="mailto:${m.email || ''}">${m.email || 'N/A'}</a></td>
-                <td>${m.servico || ''}</td>
-                <td><button class="delete-btn" onclick="cancelarMarcacao('${m.idFirebase}')">Desmarcar</button></td>
+                <td><b>${escaparHTML(m.data)}</b></td>
+                <td><span style="color:#1a365d; font-weight:bold;">${escaparHTML(m.horario)}</span></td>
+                <td>${escaparHTML(m.nome)}</td>
+                <td><a href="tel:${escaparHTML(m.telemovel)}">${escaparHTML(m.telemovel)}</a></td>
+                <td><a href="mailto:${escaparHTML(m.email)}">${escaparHTML(m.email || 'N/A')}</a></td>
+                <td>${escaparHTML(m.servico)}</td>
+                <td><button class="delete-btn" onclick="cancelarMarcacao('${m.idFirebase}', '${m.data}', '${m.horario}')">Desmarcar</button></td>
             `;
             tbody.appendChild(tr);
         });
     }
 
-    function cancelarMarcacao(idFirebase) {
+    function cancelarMarcacao(idFirebase, data, horario) {
         if (confirm("Tens a certeza que queres apagar esta marcação?")) {
-            database.ref('marcacoes_salao').child(idFirebase).remove();
+            // Remove a marcação e liberta o slot ocupado nas regras
+            database.ref('marcacoes_salao').child(idFirebase).remove().then(() => {
+                let dataChave = data.replace(/\//g, '-');
+                let horaChave = horario.split(' ')[0].replace(':', 'h');
+                database.ref('slots_ocupados').child(dataChave).child(horaChave).remove();
+            });
         }
     }
 </script>
